@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { Heart, TrendingUp, Users, ArrowRight, Sparkles } from 'lucide-react';
 import CompanyLogo from '../components/common/CompanyLogo';
 import LoginModal from '../components/auth/LoginModal';
+import { useAuth } from '../context/AuthContext';
 
-export default function WelcomePage({ onNavigate, onLogin }) {
+export default function WelcomePage({ onNavigate }) {
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const { isAuthenticated } = useAuth();
 
-  const handleLogin = async (email, fullName) => {
-    await onLogin(email, fullName);
+  const handleLoginSuccess = () => {
     setShowLoginModal(false);
     onNavigate('feed');
   };
@@ -62,8 +63,8 @@ export default function WelcomePage({ onNavigate, onLogin }) {
           <Sparkles className="w-4 h-4" />A social network that actually improves your life
         </p>
       </div>
-      <div className="text-center py-6 text-xs text-slate-400">© 2024 MetaCoreLife • The good-for-you social platform</div>
-      <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} onLogin={handleLogin} />
+      <div className="text-center py-6 text-xs text-slate-400">© 2026 MetaCoreLife • The good-for-you social platform</div>
+      <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} onSuccess={handleLoginSuccess} />
     </div>
   );
 }
