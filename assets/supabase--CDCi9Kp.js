@@ -1,0 +1,1 @@
+import{t as e}from"./index-FKCoQtoF.js";export{e as supabase};
