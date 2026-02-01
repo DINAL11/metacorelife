@@ -6,7 +6,7 @@ import CompanyLogo from '../common/CompanyLogo';
 export default function Layout({ children, currentPage, onNavigate }) {
   const { getItemCount, setShowCart } = useCart();
 
-  if (currentPage === 'welcome') return children;
+  if (currentPage === 'welcome' || currentPage === 'onboarding') return children;
 
   const navItems = [
     { name: 'Feed', icon: Home, page: 'feed' },

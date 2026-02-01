@@ -15,14 +15,15 @@ export default function ChallengesPage() {
     ? allChallenges
     : allChallenges.filter(c => c.category === activeFilter);
 
-  const handleJoinChallenge = (challengeId) => {
+  const handleJoinChallenge = async (challengeId) => {
     if (!isAuthenticated()) {
       alert('Please sign in to join challenges');
       return;
     }
 
-    if (joinChallenge(challengeId)) {
-      alert('Challenge joined! Start tracking your progress.');
+    const ok = await joinChallenge(challengeId);
+    if (ok) {
+      alert('Challenge joined! Start tracking your progress in Profile.');
     } else {
       if (ongoingChallengeIds.has(challengeId)) {
         alert('You are already participating in this challenge!');

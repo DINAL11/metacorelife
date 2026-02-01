@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import CompanyLogo from '../common/CompanyLogo';
 import { useAuth } from '../../context/AuthContext';
@@ -9,8 +9,16 @@ export default function LoginModal({ isOpen, onClose, onSuccess }) {
   const [fullName, setFullName] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const { signUp, signIn } = useAuth();
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSuccessMessage("");
+      setError("");
+    }
+  }, [isOpen]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -29,13 +37,21 @@ export default function LoginModal({ isOpen, onClose, onSuccess }) {
           setLoading(false);
           return;
         }
-        const { user, error: signUpError } = await signUp(email, password, fullName);
+        const { user, error: signUpError, needsConfirmation } = await signUp(email, password, fullName);
         if (signUpError) {
           setError(signUpError);
+        } else if (needsConfirmation) {
+          setError("");
+          setEmail("");
+          setPassword("");
+          setFullName("");
+          setSuccessMessage("Check your email to confirm your account. Once confirmed, sign in below.");
+          setIsSignUp(false);
         } else if (user) {
           setEmail("");
           setPassword("");
           setFullName("");
+          setSuccessMessage("");
           onSuccess?.();
           onClose();
         }
@@ -80,6 +96,11 @@ export default function LoginModal({ isOpen, onClose, onSuccess }) {
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
             {error}
+          </div>
+        )}
+        {successMessage && (
+          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-xl text-green-800 text-sm">
+            {successMessage}
           </div>
         )}
 
@@ -129,12 +150,13 @@ export default function LoginModal({ isOpen, onClose, onSuccess }) {
         </form>
 
         <div className="mt-4 text-center">
-          <button
-            type="button"
-            onClick={() => {
-              setIsSignUp(!isSignUp);
-              setError("");
-            }}
+        <button
+          type="button"
+          onClick={() => {
+            setIsSignUp(!isSignUp);
+            setError("");
+            setSuccessMessage("");
+          }}
             className="text-sm text-cyan-600 hover:text-cyan-700"
           >
             {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}

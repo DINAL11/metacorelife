@@ -1,13 +1,19 @@
 import React, { useState } from 'react';
-import { LogOut, Trophy, Calendar, Award } from 'lucide-react';
+import { LogOut, Trophy, Calendar, Award, Pencil } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useChallenges } from '../context/ChallengesContext';
 import LoginModal from '../components/auth/LoginModal';
+import EditProfileModal from '../components/profile/EditProfileModal';
+import CelebrationModal from '../components/challenges/CelebrationModal';
+import BadgeDetailModal from '../components/badges/BadgeDetailModal';
 
 export default function ProfilePage({ onNavigate }) {
-  const { user, logout, isAuthenticated } = useAuth();
-  const { userPosts, getOngoingChallenges, getCompletedChallenges, getBadges, getChallengeById, updateChallengeProgress } = useChallenges();
+  const { user, logout, isAuthenticated, updateProfile } = useAuth();
+  const { userPosts, getOngoingChallenges, getCompletedChallenges, getBadges, getChallengeById, updateChallengeProgress, createPost } = useChallenges();
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [celebration, setCelebration] = useState(null); // { challengeTitle, challengeBadge }
+  const [selectedBadge, setSelectedBadge] = useState(null);
   const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'challenges', 'posts'
 
   const handleLogout = () => {
@@ -56,20 +62,36 @@ export default function ProfilePage({ onNavigate }) {
       {/* Profile Header */}
       <div className="bg-white rounded-3xl p-6 shadow-sm mb-4">
         <div className="flex items-center gap-4 mb-6">
-          <div className="w-20 h-20 bg-gradient-to-br from-cyan-400 to-purple-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
-            {user.fullName.charAt(0).toUpperCase()}
+          <div className="w-20 h-20 rounded-full overflow-hidden bg-gradient-to-br from-cyan-400 to-purple-600 flex items-center justify-center text-white text-2xl font-bold shrink-0">
+            {user.avatarUrl ? (
+              <img src={user.avatarUrl} alt={user.fullName} className="w-full h-full object-cover" />
+            ) : (
+              user.fullName.charAt(0).toUpperCase()
+            )}
           </div>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <h2 className="text-2xl font-bold text-slate-800 mb-1">{user.fullName}</h2>
-            <p className="text-slate-600 text-sm">{user.email}</p>
+            <p className="text-slate-600 text-sm truncate">{user.email}</p>
+            {user.bio && (
+              <p className="text-slate-600 text-sm mt-2 line-clamp-2">{user.bio}</p>
+            )}
           </div>
-          <button
-            onClick={handleLogout}
-            className="p-2 text-slate-400 hover:text-slate-600 transition-colors"
-            title="Sign Out"
-          >
-            <LogOut className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={() => setShowEditProfile(true)}
+              className="p-2 text-slate-400 hover:text-slate-600 transition-colors"
+              title="Edit Profile"
+            >
+              <Pencil className="w-5 h-5" />
+            </button>
+            <button
+              onClick={handleLogout}
+              className="p-2 text-slate-400 hover:text-slate-600 transition-colors"
+              title="Sign Out"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-3 gap-4 mb-6">
@@ -125,19 +147,28 @@ export default function ProfilePage({ onNavigate }) {
       {/* Tab Content */}
       {activeTab === 'overview' && (
         <div className="space-y-4">
-          {/* Badges */}
+          {/* Badges - certificate-style, clickable */}
           {badges.length > 0 && (
             <div className="bg-white rounded-3xl p-6 shadow-sm">
               <div className="flex items-center gap-2 mb-4">
                 <Award className="w-5 h-5 text-yellow-500" />
                 <h3 className="text-lg font-bold text-slate-800">Badges Earned</h3>
               </div>
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 {badges.map((badge, idx) => (
-                  <div key={idx} className="text-center">
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setSelectedBadge(badge)}
+                    className="text-left rounded-2xl p-4 border-2 border-cyan-100 bg-gradient-to-br from-cyan-50/80 to-purple-50/80 hover:border-cyan-300 hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  >
                     <div className="text-4xl mb-2">{badge.badge}</div>
-                    <p className="text-xs text-slate-600 line-clamp-2">{badge.challengeTitle}</p>
-                  </div>
+                    <p className="text-sm font-semibold text-slate-800 line-clamp-2">{badge.challengeTitle}</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {badge.completedDate ? new Date(badge.completedDate).toLocaleDateString(undefined, { dateStyle: 'medium' }) : ''}
+                    </p>
+                    <span className="text-xs text-cyan-600 font-medium mt-2 inline-block">View details →</span>
+                  </button>
                 ))}
               </div>
             </div>
@@ -174,8 +205,10 @@ export default function ProfilePage({ onNavigate }) {
                         <button
                           type="button"
                           onClick={async () => {
-                            const ok = await updateChallengeProgress(uc.id);
-                            if (!ok) {
+                            const result = await updateChallengeProgress(uc.id);
+                            if (result.completedChallenge) {
+                              setCelebration(result.completedChallenge);
+                            } else if (!result.success) {
                               alert('You already logged progress for today or this challenge is completed.');
                             }
                           }}
@@ -239,8 +272,10 @@ export default function ProfilePage({ onNavigate }) {
                             <button
                               type="button"
                               onClick={async () => {
-                                const ok = await updateChallengeProgress(uc.id);
-                                if (!ok) {
+                                const result = await updateChallengeProgress(uc.id);
+                                if (result.completedChallenge) {
+                                  setCelebration(result.completedChallenge);
+                                } else if (!result.success) {
                                   alert('You already logged progress for today or this challenge is completed.');
                                 }
                               }}
@@ -268,17 +303,22 @@ export default function ProfilePage({ onNavigate }) {
               <div className="space-y-3">
                 {completedChallenges.map(uc => {
                   const challenge = getChallengeById(uc.challengeId);
-                  if (!challenge) return null;
+                  const title = challenge?.title || 'Challenge';
+                  const badge = challenge?.badge || '🏆';
+                  const emoji = challenge?.emoji || '✓';
                   return (
                     <div key={uc.id} className="bg-white rounded-3xl p-5 shadow-sm border-l-4 border-green-400">
                       <div className="flex items-start gap-4">
-                        <span className="text-4xl">{challenge.emoji}</span>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h4 className="font-bold text-slate-800">{challenge.title}</h4>
-                            <span className="text-2xl">{challenge.badge}</span>
+                        <span className="text-4xl">{emoji}</span>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-bold text-slate-800 mb-1">{title}</h4>
+                          <p className="text-sm text-slate-600 mb-2">
+                            Completed on {uc.lastUpdateDate ? new Date(uc.lastUpdateDate).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—'}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <span className="text-2xl" title="Earned badge">{badge}</span>
+                            <span className="text-xs text-slate-500">Badge earned</span>
                           </div>
-                          <p className="text-sm text-slate-600">Completed on {new Date(uc.lastUpdateDate).toLocaleDateString()}</p>
                         </div>
                       </div>
                     </div>
@@ -344,6 +384,38 @@ export default function ProfilePage({ onNavigate }) {
           )}
         </div>
       )}
+      <EditProfileModal
+        isOpen={showEditProfile}
+        onClose={() => setShowEditProfile(false)}
+        user={user}
+        onSave={async (updates) => {
+          const mapped = {};
+          if (updates.full_name !== undefined) mapped.full_name = updates.full_name;
+          if (updates.bio !== undefined) mapped.bio = updates.bio;
+          if (updates.avatar_url !== undefined) mapped.avatar_url = updates.avatar_url;
+          return updateProfile(mapped);
+        }}
+      />
+      <CelebrationModal
+        isOpen={!!celebration}
+        onClose={() => setCelebration(null)}
+        userName={user?.fullName}
+        challengeTitle={celebration?.challengeTitle}
+        challengeBadge={celebration?.challengeBadge}
+      />
+      <BadgeDetailModal
+        isOpen={!!selectedBadge}
+        onClose={() => setSelectedBadge(null)}
+        badge={selectedBadge}
+        userName={user?.fullName}
+        onShareToFeed={async () => {
+          if (!selectedBadge || !user) return;
+          const msg = `🎉 I earned the ${selectedBadge.challengeTitle} badge on MetaCoreLife! Completed on ${selectedBadge.completedDate ? new Date(selectedBadge.completedDate).toLocaleDateString(undefined, { dateStyle: 'medium' }) : ''}.`;
+          await createPost(msg, selectedBadge.challengeId, 'completion', null);
+          setSelectedBadge(null);
+          onNavigate('feed');
+        }}
+      />
     </div>
   );
 }

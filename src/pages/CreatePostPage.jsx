@@ -12,6 +12,8 @@ export default function CreatePostPage({ onNavigate }) {
   const [mediaFile, setMediaFile] = useState(null);
   const [mediaPreview, setMediaPreview] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [postError, setPostError] = useState('');
+  const POST_TIMEOUT_MS = 20000;
 
   if (!isAuthenticated()) {
     return (
@@ -55,14 +57,13 @@ export default function CreatePostPage({ onNavigate }) {
     if (submitting) return;
 
     setSubmitting(true);
+    setPostError('');
 
-    try {
+    const runPost = async () => {
       let media = null;
 
-      // Upload media if provided
       if (mediaFile) {
         try {
-          // Lazy import to avoid circular deps
           const { supabase } = await import('../lib/supabase');
           const fileExt = mediaFile.name.split('.').pop();
           const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${fileExt}`;
@@ -77,12 +78,12 @@ export default function CreatePostPage({ onNavigate }) {
 
           if (error) {
             console.error('Error uploading media:', error);
-            alert('Could not upload media. Posting without media.');
-          } else if (data?.path) {
+            throw new Error('Could not upload media. Try again without media.');
+          }
+          if (data?.path) {
             const { data: publicUrlData } = supabase.storage
               .from('post-media')
               .getPublicUrl(data.path);
-
             if (publicUrlData?.publicUrl) {
               media = {
                 url: publicUrlData.publicUrl,
@@ -92,43 +93,39 @@ export default function CreatePostPage({ onNavigate }) {
           }
         } catch (err) {
           console.error('Unexpected error uploading media:', err);
-          alert('Could not upload media. Posting without media.');
+          throw new Error(err.message || 'Could not upload media. Try again without media.');
         }
       }
 
-      let success = false;
-
       if (postType === 'update' && selectedChallenge) {
-        // Check if challenge will be completed after this update
         const challenge = getChallengeById(selectedChallenge.challengeId);
         const willComplete = selectedChallenge.currentDay + 1 > challenge.duration;
-        
-        // Update challenge progress
-        await updateChallengeProgress(selectedChallenge.id);
-        
-        // If challenge will be completed, create completion post
+
+        const result = await updateChallengeProgress(selectedChallenge.id);
+        if (!result?.success) {
+          throw new Error('Could not update challenge progress. Please try again.');
+        }
+
         if (willComplete) {
-          success = await createPost(
+          const success = await createPost(
             `🎉 I completed the ${challenge.title} challenge! ${content}`,
             selectedChallenge.challengeId,
             'completion',
             media
           );
+          if (!success) throw new Error('Post created but completion post failed. Check your feed.');
         } else {
-          success = await createPost(content, selectedChallenge.challengeId, 'update', media);
+          const success = await createPost(content, selectedChallenge.challengeId, 'update', media);
+          if (!success) throw new Error('Could not create post. Please try again.');
         }
       } else {
-        success = await createPost(
+        const success = await createPost(
           content,
           selectedChallenge?.challengeId || null,
           postType,
           media
         );
-      }
-
-      if (!success) {
-        alert('Could not create post. Please try again.');
-        return;
+        if (!success) throw new Error('Could not create post. Please try again.');
       }
 
       setContent('');
@@ -137,6 +134,18 @@ export default function CreatePostPage({ onNavigate }) {
       setMediaFile(null);
       setMediaPreview(null);
       onNavigate('feed');
+    };
+
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Post timed out. Check your connection and try again.')), POST_TIMEOUT_MS);
+    });
+
+    try {
+      await Promise.race([runPost(), timeoutPromise]);
+    } catch (err) {
+      const message = err?.message || 'Something went wrong. Please try again.';
+      setPostError(message);
+      console.error('Post error:', err);
     } finally {
       setSubmitting(false);
     }
@@ -224,6 +233,12 @@ export default function CreatePostPage({ onNavigate }) {
             />
             <p className="text-xs text-slate-500 mt-1">{content.length} characters</p>
           </div>
+
+          {postError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+              {postError}
+            </div>
+          )}
 
           {/* Media Upload (Optional) */}
           <div>

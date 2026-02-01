@@ -93,6 +93,17 @@ const sampleChallenges = [
     duration: 30,
     participants: 1234,
     badge: '📚'
+  },
+  {
+    id: 9,
+    title: '1-Day Quick Win',
+    emoji: '⚡',
+    category: 'Health',
+    level: 'Beginner',
+    description: 'Complete one small win today. Join, log progress, and earn your first badge!',
+    duration: 1,
+    participants: 0,
+    badge: '⚡'
   }
 ];
 
@@ -263,18 +274,24 @@ export function ChallengesProvider({ children }) {
     }
   };
 
+  // Use local date for streak logic (avoid timezone bugs)
+  const toLocalDateString = (date) => {
+    const d = new Date(date);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
   const updateChallengeProgress = async (userChallengeId) => {
-    if (!user) return false;
+    if (!user) return { success: false, completedChallenge: null };
 
     const userChallenge = userChallenges.find(uc => uc.id === userChallengeId && uc.userId === user.id && !uc.completed);
-    if (!userChallenge) return false;
+    if (!userChallenge) return { success: false, completedChallenge: null };
 
-    const today = new Date().toISOString().split('T')[0];
-    const lastUpdate = new Date(userChallenge.lastUpdateDate).toISOString().split('T')[0];
-    
+    const today = toLocalDateString(new Date());
+    const lastUpdate = toLocalDateString(userChallenge.lastUpdateDate);
+
     if (today === lastUpdate) {
       // Already updated today
-      return false;
+      return { success: false, completedChallenge: null };
     }
 
     let newDay = userChallenge.currentDay;
@@ -282,13 +299,13 @@ export function ChallengesProvider({ children }) {
 
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const yesterdayStr = toLocalDateString(yesterday);
 
     if (lastUpdate === yesterdayStr) {
-      // Consecutive day
+      // Consecutive day - increment streak
       newStreak = userChallenge.streak + 1;
     } else {
-      // Streak broken
+      // Streak broken (missed a day or more)
       newStreak = 1;
     }
 
@@ -311,8 +328,8 @@ export function ChallengesProvider({ children }) {
 
       if (error) throw error;
 
-      const updated = userChallenges.map(uc => 
-        uc.id === userChallengeId 
+      const updated = userChallenges.map(uc =>
+        uc.id === userChallengeId
           ? {
               ...uc,
               currentDay: data.current_day,
@@ -324,10 +341,22 @@ export function ChallengesProvider({ children }) {
       );
 
       setUserChallenges(updated);
-      return true;
+
+      if (isCompleted && challenge) {
+        return {
+          success: true,
+          completedChallenge: {
+            challengeTitle: challenge.title,
+            challengeBadge: challenge.badge,
+            challengeId: challenge.id,
+            lastUpdateDate: data.last_update_date
+          }
+        };
+      }
+      return { success: true, completedChallenge: null };
     } catch (error) {
       console.error('Error updating challenge progress:', error);
-      return false;
+      return { success: false, completedChallenge: null };
     }
   };
 

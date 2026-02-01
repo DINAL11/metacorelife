@@ -35,13 +35,27 @@ This will create:
 - Row Level Security (RLS) policies
 - Indexes for performance
 
-## 4. Enable Email Authentication
+### 3b. Run Profile Migration (profile picture, bio, onboarding)
+
+1. In SQL Editor, open `supabase-migration-profile-onboarding.sql`
+2. Copy and paste the script
+3. Click **Run** to add `avatar_url`, `bio`, `onboarding_seen` to profiles and `media_url`, `media_type` to posts
+
+## 4. Set Up Storage Buckets
+
+1. In Supabase dashboard, go to **Storage**
+2. Create these buckets (both **Public**):
+   - `avatars` – for profile pictures
+   - `post-media` – for post images/videos
+3. For each bucket, ensure the RLS policies allow authenticated users to upload (Supabase default policies usually work)
+
+## 5. Enable Email Authentication
 
 1. In Supabase dashboard, go to **Authentication** > **Providers**
 2. Make sure **Email** is enabled
 3. Configure email templates if needed (optional)
 
-## 5. Test the Integration
+## 6. Test the Integration
 
 1. Start your development server: `npm run dev`
 2. Try signing up with a new account
