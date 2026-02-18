@@ -1,15 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Target, CheckCircle, Flame } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useChallenges } from '../context/ChallengesContext';
 
-export default function ChallengesPage() {
+export default function ChallengesPage({ highlightChallengeId }) {
   const { isAuthenticated } = useAuth();
   const { allChallenges, joinChallenge, userChallenges, getOngoingChallenges } = useChallenges();
   const [activeFilter, setActiveFilter] = useState('All');
   const filters = ['All', 'Health', 'Wealth', 'Relationships'];
 
   const ongoingChallengeIds = new Set(getOngoingChallenges().map(uc => uc.challengeId));
+  const challengeRefs = useRef({});
+
+  useEffect(() => {
+    if (highlightChallengeId && challengeRefs.current[highlightChallengeId]) {
+      challengeRefs.current[highlightChallengeId].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [highlightChallengeId]);
 
   const filteredChallenges = activeFilter === 'All'
     ? allChallenges
@@ -75,7 +82,12 @@ export default function ChallengesPage() {
             return (
               <div
                 key={challenge.id}
-                className="bg-white rounded-3xl p-4 md:p-6 shadow-sm border-t-4 border-cyan-400 hover:shadow-md transition-all"
+                ref={el => challengeRefs.current[challenge.id] = el}
+                className={`bg-white dark:bg-slate-800 rounded-3xl p-4 md:p-6 shadow-sm border-t-4 hover:shadow-md transition-all ${
+                  highlightChallengeId === challenge.id
+                    ? 'border-cyan-500 ring-2 ring-cyan-400/50 dark:ring-cyan-500/50'
+                    : 'border-cyan-400 dark:border-slate-600'
+                }`}
               >
                 <div className="flex items-start gap-3 md:gap-4">
                   <div className="text-3xl md:text-4xl flex-shrink-0">{challenge.emoji}</div>

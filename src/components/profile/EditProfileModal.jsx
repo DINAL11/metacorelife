@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 
 export default function EditProfileModal({ isOpen, onClose, user, onSave }) {
   const [fullName, setFullName] = useState(user?.fullName || '');
+  const [username, setUsername] = useState(user?.username || '');
   const [bio, setBio] = useState(user?.bio || '');
   const [avatarPreview, setAvatarPreview] = useState(user?.avatarUrl || null);
   const [avatarFile, setAvatarFile] = useState(null);
@@ -14,7 +15,9 @@ export default function EditProfileModal({ isOpen, onClose, user, onSave }) {
   useEffect(() => {
     if (isOpen && user) {
       setFullName(user.fullName || '');
+      setUsername(user.username || '');
       setBio(user.bio || '');
+      setIsPublic(user.isPublic ?? true);
       setAvatarPreview(user.avatarUrl || null);
       setAvatarFile(null);
       setError('');
@@ -45,35 +48,41 @@ export default function EditProfileModal({ isOpen, onClose, user, onSave }) {
     setSaving(true);
 
     try {
-      let avatarUrl = user?.avatarUrl || null;
+      let avatarUrl = user?.avatarUrl;
 
       if (avatarFile) {
-        const fileExt = avatarFile.name.split('.').pop();
-        const fileName = `avatar.${fileExt}`;
-        const filePath = `${user.id}/${fileName}`;
+        try {
+          const fileExt = avatarFile.name.split('.').pop();
+          const fileName = `avatar.${fileExt}`;
+          const filePath = `${user.id}/${fileName}`;
 
-        const { data, error: uploadError } = await supabase.storage
-          .from('avatars')
-          .upload(filePath, avatarFile, {
-            contentType: avatarFile.type,
-            upsert: true
-          });
+          const { data, error: uploadError } = await supabase.storage
+            .from('avatars')
+            .upload(filePath, avatarFile, {
+              contentType: avatarFile.type,
+              upsert: true
+            });
 
-        if (uploadError) {
-          throw new Error(uploadError.message || 'Failed to upload image');
+          if (uploadError) throw uploadError;
+
+          const { data: publicUrlData } = supabase.storage
+            .from('avatars')
+            .getPublicUrl(data.path);
+          avatarUrl = publicUrlData?.publicUrl;
+        } catch (storageErr) {
+          console.error('Avatar upload error:', storageErr);
+          setError(storageErr.message || 'Photo upload failed. Run supabase-migration-v2.sql for storage policies.');
+          avatarUrl = user?.avatarUrl;
         }
-
-        const { data: publicUrlData } = supabase.storage
-          .from('avatars')
-          .getPublicUrl(data.path);
-        avatarUrl = publicUrlData?.publicUrl || null;
       }
 
       const updates = {
         full_name: fullName.trim() || user?.fullName,
-        bio: bio.trim() || null
+        bio: bio.trim() || null,
+        username: username.trim() ? username.trim().replace(/^@/, '') : null,
+        is_public: isPublic
       };
-      if (avatarUrl !== undefined) updates.avatar_url = avatarUrl;
+      if (avatarFile && avatarUrl) updates.avatar_url = avatarUrl;
 
       const ok = await onSave(updates);
       if (ok) {
@@ -92,7 +101,7 @@ export default function EditProfileModal({ isOpen, onClose, user, onSave }) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-3xl p-6 max-w-md w-full relative">
+      <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 max-w-md w-full relative">
         <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600">
           <X className="w-5 h-5" />
         </button>
@@ -135,23 +144,47 @@ export default function EditProfileModal({ isOpen, onClose, user, onSave }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Full Name</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Full Name</label>
             <input
               type="text"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500"
               placeholder="Your name"
               disabled={saving}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Bio</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Username</label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              placeholder="username (without @)"
+              disabled={saving}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Public profile</label>
+            <button
+              type="button"
+              onClick={() => setIsPublic(!isPublic)}
+              className={`relative w-12 h-6 rounded-full transition-colors ${isPublic ? 'bg-cyan-500' : 'bg-slate-300 dark:bg-slate-600'}`}
+            >
+              <span className="absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all duration-200" style={{ left: isPublic ? '28px' : '4px' }} />
+            </button>
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400 -mt-2 mb-2">When public, others can see your posts, badges, and challenges</p>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Bio</label>
             <textarea
               value={bio}
               onChange={(e) => setBio(e.target.value)}
-              className="w-full px-4 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 resize-none"
+              className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 resize-none"
               rows={3}
               placeholder="Tell us about yourself..."
               disabled={saving}

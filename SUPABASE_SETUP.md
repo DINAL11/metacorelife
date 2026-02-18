@@ -41,6 +41,12 @@ This will create:
 2. Copy and paste the script
 3. Click **Run** to add `avatar_url`, `bio`, `onboarding_seen` to profiles and `media_url`, `media_type` to posts
 
+### 3c. Run Migration v2 (username, public profiles, storage)
+
+1. In SQL Editor, open `supabase-migration-v2.sql`
+2. Copy and paste the script
+3. Click **Run** to add `username`, `is_public`, storage policies for avatars, and public profile viewing
+
 ## 4. Set Up Storage Buckets
 
 1. In Supabase dashboard, go to **Storage**

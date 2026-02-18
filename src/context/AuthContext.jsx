@@ -24,9 +24,10 @@ export function AuthProvider({ children }) {
             id: session.user.id,
             email: session.user.email,
             fullName: profile?.full_name || session.user.email?.split('@')[0] || 'User',
+            username: profile?.username || null,
             avatarUrl: profile?.avatar_url || null,
             bio: profile?.bio || null,
-            onboardingSeen: profile?.onboarding_seen ?? true
+            isPublic: profile?.is_public ?? true
           });
         }
       } catch (error) {
@@ -56,8 +57,7 @@ export function AuthProvider({ children }) {
             .insert({
               id: session.user.id,
               email: session.user.email,
-              full_name: fullName,
-              onboarding_seen: false
+              full_name: fullName
             })
             .select()
             .single();
@@ -66,18 +66,20 @@ export function AuthProvider({ children }) {
             id: session.user.id,
             email: session.user.email,
             fullName: newProfile?.full_name || session.user.email?.split('@')[0] || 'User',
+            username: newProfile?.username || null,
             avatarUrl: newProfile?.avatar_url || null,
             bio: newProfile?.bio || null,
-            onboardingSeen: newProfile?.onboarding_seen ?? true
+            isPublic: newProfile?.is_public ?? true
           });
         } else {
           setUser({
             id: session.user.id,
             email: session.user.email,
             fullName: profile.full_name || session.user.email?.split('@')[0] || 'User',
+            username: profile.username || null,
             avatarUrl: profile.avatar_url || null,
             bio: profile.bio || null,
-            onboardingSeen: profile.onboarding_seen ?? true
+            isPublic: profile.is_public ?? true
           });
         }
       } else {
@@ -117,8 +119,7 @@ export function AuthProvider({ children }) {
             .insert({
               id: authData.user.id,
               email: email,
-              full_name: fullName,
-              onboarding_seen: false
+              full_name: fullName
             })
             .select()
             .single();
@@ -131,9 +132,10 @@ export function AuthProvider({ children }) {
             id: authData.user.id,
             email: authData.user.email,
             fullName: fullName,
+            username: newProfile?.username || null,
             avatarUrl: newProfile?.avatar_url || null,
             bio: newProfile?.bio || null,
-            onboardingSeen: false
+            isPublic: newProfile?.is_public ?? true
           });
         }
 
@@ -159,21 +161,34 @@ export function AuthProvider({ children }) {
       if (error) throw error;
 
       if (data.user) {
-        // Fetch user profile
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', data.user.id)
-          .single();
+        try {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', data.user.id)
+            .single();
 
-        setUser({
-          id: data.user.id,
-          email: data.user.email,
-          fullName: profile?.full_name || data.user.email?.split('@')[0] || 'User',
-          avatarUrl: profile?.avatar_url || null,
-          bio: profile?.bio || null,
-          onboardingSeen: profile?.onboarding_seen ?? true
-        });
+          setUser({
+            id: data.user.id,
+            email: data.user.email,
+            fullName: profile?.full_name || data.user.email?.split('@')[0] || 'User',
+            username: profile?.username || null,
+            avatarUrl: profile?.avatar_url || null,
+            bio: profile?.bio || null,
+            isPublic: profile?.is_public ?? true
+          });
+        } catch (profileErr) {
+          console.warn('Profile fetch failed, using defaults:', profileErr);
+          setUser({
+            id: data.user.id,
+            email: data.user.email,
+            fullName: data.user.email?.split('@')[0] || 'User',
+            username: null,
+            avatarUrl: null,
+            bio: null,
+            isPublic: true
+          });
+        }
       }
 
       return { user: data.user, error: null };
@@ -209,9 +224,10 @@ export function AuthProvider({ children }) {
         setUser(prev => ({
           ...prev,
           fullName: data.full_name ?? prev.fullName,
+          username: data.username ?? prev.username,
           avatarUrl: data.avatar_url ?? prev.avatarUrl,
           bio: data.bio ?? prev.bio,
-          onboardingSeen: data.onboarding_seen ?? prev.onboardingSeen
+          isPublic: data.is_public ?? prev.isPublic
         }));
       }
       return true;
@@ -221,12 +237,8 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const completeOnboarding = async () => {
-    return updateProfile({ onboarding_seen: true });
-  };
-
   return (
-    <AuthContext.Provider value={{ user, signUp, signIn, logout, isAuthenticated, loading, updateProfile, completeOnboarding }}>
+    <AuthContext.Provider value={{ user, signUp, signIn, logout, isAuthenticated, loading, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );

@@ -2,55 +2,70 @@ import React, { useState } from 'react';
 import { CartProvider } from './context/CartContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ChallengesProvider } from './context/ChallengesContext';
+import { ThemeProvider } from './context/ThemeContext';
 import Layout from './components/layout/Layout';
 import CartSidebar from './components/cart/CartSidebar';
 import WelcomePage from './pages/WelcomePage';
-import OnboardingPage from './pages/OnboardingPage';
 import FeedPage from './pages/FeedPage';
+import SearchPage from './pages/SearchPage';
+import UserProfilePage from './pages/UserProfilePage';
 import ChallengesPage from './pages/ChallengesPage';
 import MarketplacePage from './pages/MarketplacePage';
 import ProfilePage from './pages/ProfilePage';
 import CreatePostPage from './pages/CreatePostPage';
 
 function AppContent() {
-  const { user, loading, completeOnboarding } = useAuth();
   const [currentPage, setCurrentPage] = useState('welcome');
+  const [userProfileId, setUserProfileId] = useState(null);
+  const [highlightChallengeId, setHighlightChallengeId] = useState(null);
 
-  const renderPage = () => {
-    // Show onboarding for new users who haven't seen it
-    if (user && user.onboardingSeen === false && currentPage !== 'welcome') {
-      return (
-        <OnboardingPage
-          onComplete={completeOnboarding}
-          onNavigate={setCurrentPage}
-        />
-      );
-    }
-
-    switch (currentPage) {
-      case 'welcome':
-        return <WelcomePage onNavigate={setCurrentPage} />;
-      case 'feed':
-        return <FeedPage onNavigate={setCurrentPage} />;
-      case 'challenges':
-        return <ChallengesPage />;
-      case 'marketplace':
-        return <MarketplacePage />;
-      case 'profile':
-        return <ProfilePage onNavigate={setCurrentPage} />;
-      case 'create':
-        return <CreatePostPage onNavigate={setCurrentPage} />;
-      default:
-        return <FeedPage />;
+  const handleNavigate = (page, options) => {
+    if (page === 'userProfile' && options?.userId) {
+      setUserProfileId(options.userId);
+      setCurrentPage('userProfile');
+    } else if (page === 'challenges') {
+      setHighlightChallengeId(options?.highlightChallengeId ?? null);
+      setCurrentPage('challenges');
+    } else {
+      setUserProfileId(null);
+      setHighlightChallengeId(null);
+      setCurrentPage(page);
     }
   };
 
-  const showOnboarding = user && user.onboardingSeen === false && currentPage !== 'welcome';
-  const effectivePage = showOnboarding ? 'onboarding' : currentPage;
+  const renderPage = () => {
+    if (currentPage === 'userProfile' && userProfileId) {
+      return (
+        <UserProfilePage
+          userId={userProfileId}
+          onBack={() => handleNavigate('feed')}
+          onNavigate={handleNavigate}
+        />
+      );
+    }
+    switch (currentPage) {
+      case 'welcome':
+        return <WelcomePage onNavigate={handleNavigate} />;
+      case 'feed':
+        return <FeedPage onNavigate={handleNavigate} />;
+      case 'search':
+        return <SearchPage onNavigate={handleNavigate} />;
+      case 'challenges':
+        return <ChallengesPage highlightChallengeId={highlightChallengeId} />;
+      case 'marketplace':
+        return <MarketplacePage />;
+      case 'profile':
+        return <ProfilePage onNavigate={handleNavigate} />;
+      case 'create':
+        return <CreatePostPage onNavigate={handleNavigate} />;
+      default:
+        return <FeedPage onNavigate={handleNavigate} />;
+    }
+  };
 
   return (
     <>
-      <Layout currentPage={effectivePage} onNavigate={setCurrentPage}>
+      <Layout currentPage={currentPage} onNavigate={handleNavigate}>
         {renderPage()}
       </Layout>
       <CartSidebar />
@@ -60,12 +75,14 @@ function AppContent() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <ChallengesProvider>
-        <CartProvider>
-          <AppContent />
-        </CartProvider>
-      </ChallengesProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <ChallengesProvider>
+          <CartProvider>
+            <AppContent />
+          </CartProvider>
+        </ChallengesProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

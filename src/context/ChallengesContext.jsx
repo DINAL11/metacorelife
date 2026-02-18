@@ -450,6 +450,40 @@ export function ChallengesProvider({ children }) {
     }
   };
 
+  const addComment = async (postId, text) => {
+    if (!user) return false;
+
+    const post = allPosts.find(p => p.id === postId);
+    if (!post) return false;
+
+    const newComment = {
+      userId: user.id,
+      userName: user.fullName || user.email?.split('@')[0] || 'User',
+      text: text.trim()
+    };
+
+    const newComments = [...(post.comments || []), newComment];
+
+    try {
+      const { error } = await supabase
+        .from('posts')
+        .update({ comments: newComments })
+        .eq('id', postId);
+
+      if (error) throw error;
+
+      const updated = allPosts.map(p =>
+        p.id === postId ? { ...p, comments: newComments } : p
+      );
+
+      setAllPosts(updated);
+      return true;
+    } catch (error) {
+      console.error('Error adding comment:', error);
+      return false;
+    }
+  };
+
   const getBadges = () => {
     if (!user) return [];
     const completed = getCompletedChallenges();
@@ -477,6 +511,7 @@ export function ChallengesProvider({ children }) {
       getChallengeById,
       createPost,
       likePost,
+      addComment,
       getBadges,
       loading
     }}>

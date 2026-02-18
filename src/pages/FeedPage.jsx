@@ -1,22 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Heart, MessageCircle, Share2, Sparkles, Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useChallenges } from '../context/ChallengesContext';
+import { fakePosts, isFakeProfileId } from '../data/fakeProfiles';
+import PostCommentModal from '../components/feed/PostCommentModal';
 
 export default function FeedPage({ onNavigate }) {
   const { isAuthenticated, user } = useAuth();
-  const { allPosts, likePost, getChallengeById } = useChallenges();
+  const { allPosts, likePost, addComment, getChallengeById } = useChallenges();
   const [activeFilter, setActiveFilter] = useState('All');
+  const [fakePostLikes, setFakePostLikes] = useState({});
+  const [fakePostComments, setFakePostComments] = useState({});
+  const [commentModalPost, setCommentModalPost] = useState(null);
   const filters = ['All', 'Health', 'Wealth', 'Relationships'];
 
-  // Sort posts by date (newest first)
-  const sortedPosts = [...allPosts].sort((a, b) => 
-    new Date(b.createdAt) - new Date(a.createdAt)
-  );
+  // Merge real posts with fake posts, sort by date (newest first)
+  const mergedPosts = useMemo(() => {
+    const combined = [...allPosts, ...fakePosts];
+    return combined.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }, [allPosts]);
 
   const filteredPosts = activeFilter === 'All'
-    ? sortedPosts
-    : sortedPosts.filter(post => {
+    ? mergedPosts
+    : mergedPosts.filter(post => {
         if (post.challengeId) {
           const challenge = getChallengeById(post.challengeId);
           return challenge && challenge.category === activeFilter;
@@ -24,18 +30,101 @@ export default function FeedPage({ onNavigate }) {
         return false;
       });
 
-  const handleLike = (postId) => {
+  const handleLike = (postId, isFake) => {
     if (!isAuthenticated()) {
       alert('Please sign in to like posts');
       return;
     }
-    likePost(postId);
+    if (isFake) {
+      setFakePostLikes(prev => {
+        const current = prev[postId] || [];
+        const hasLiked = current.includes(user?.id);
+        return {
+          ...prev,
+          [postId]: hasLiked ? current.filter(id => id !== user.id) : [...current, user.id]
+        };
+      });
+    } else {
+      likePost(postId);
+    }
+  };
+
+  const getLikeCount = (post) => {
+    if (post.isFake) {
+      const base = post.likes?.length || 0;
+      const userLiked = user && (fakePostLikes[post.id] || []).includes(user.id);
+      return base + (userLiked ? 1 : 0);
+    }
+    return post.likes?.length || 0;
+  };
+
+  const isPostLiked = (post) => {
+    if (!user) return false;
+    if (post.isFake) {
+      const userLikes = fakePostLikes[post.id] || [];
+      return post.likes?.includes(user.id) || userLikes.includes(user.id);
+    }
+    return post.likes?.includes(user.id);
+  };
+
+  const handleViewProfile = (post) => {
+    if (post.userId && isFakeProfileId(post.userId)) {
+      onNavigate('userProfile', { userId: post.userId });
+    }
+  };
+
+  const getCommentCount = (post) => {
+    if (post.isFake) {
+      const base = post.comments?.length || 0;
+      const extra = fakePostComments[post.id]?.length || 0;
+      return base + extra;
+    }
+    return post.comments?.length || 0;
+  };
+
+  const getComments = (post) => {
+    if (post.isFake) {
+      const base = post.comments || [];
+      const extra = fakePostComments[post.id] || [];
+      return [...base, ...extra];
+    }
+    return post.comments || [];
+  };
+
+  const handleAddComment = async (postId, text, isFake) => {
+    if (!isAuthenticated()) return false;
+    if (isFake) {
+      setFakePostComments(prev => ({
+        ...prev,
+        [postId]: [...(prev[postId] || []), { userId: user.id, userName: user.fullName || 'You', text }]
+      }));
+      return true;
+    }
+    return addComment(postId, text);
+  };
+
+  const handleShare = (post) => {
+    const url = `${window.location.origin}${window.location.pathname}#post-${post.id}`;
+    const text = `${post.userName} on MetaCoreLife: ${post.content?.slice(0, 100)}...`;
+    if (navigator.share) {
+      navigator.share({
+        title: 'MetaCoreLife',
+        text,
+        url
+      }).catch(() => navigator.clipboard?.writeText(url).then(() => alert('Link copied!'))).catch(() => alert('Share unavailable'));
+    } else {
+      navigator.clipboard?.writeText(url).then(() => alert('Link copied to clipboard!')).catch(() => alert('Could not copy'));
+    }
+  };
+
+  const handleChallengeClick = (challengeId) => {
+    onNavigate('challenges', { highlightChallengeId: challengeId });
   };
 
   return (
     <div className="max-w-2xl mx-auto">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl md:text-3xl font-bold text-slate-800">Feed</h1>
+        <h1 className="text-2xl md:text-3xl font-bold text-slate-800 dark:text-slate-100">Feed</h1>
         {isAuthenticated() && onNavigate && (
           <button
             onClick={() => onNavigate('create')}
@@ -54,7 +143,7 @@ export default function FeedPage({ onNavigate }) {
             className={`px-4 md:px-6 py-2 rounded-full font-medium transition-all whitespace-nowrap text-sm md:text-base ${
               activeFilter === filter
                 ? 'bg-gradient-to-r from-cyan-500 to-purple-600 text-white'
-                : 'bg-white text-slate-600 hover:bg-slate-50'
+                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
             }`}
           >
             {filter}
@@ -88,18 +177,30 @@ export default function FeedPage({ onNavigate }) {
         <div className="space-y-4">
           {filteredPosts.map(post => {
             const challenge = post.challengeId ? getChallengeById(post.challengeId) : null;
-            const isLiked = isAuthenticated() && user && post.likes.includes(user.id);
+            const isLiked = isAuthenticated() && isPostLiked(post);
+            const isClickable = post.isFake && post.userId;
 
             return (
               <div key={post.id} className="bg-white rounded-3xl p-5 md:p-6 shadow-sm hover:shadow-md transition-all">
                 {/* Post Header */}
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-gradient-to-br from-cyan-400 to-purple-600 rounded-full flex items-center justify-center text-white font-bold">
-                    {post.userName.charAt(0).toUpperCase()}
+                <div
+                  className={`flex items-center gap-3 mb-4 ${isClickable ? 'cursor-pointer' : ''}`}
+                  onClick={() => isClickable && handleViewProfile(post)}
+                  onKeyDown={(e) => isClickable && (e.key === 'Enter' || e.key === ' ') && handleViewProfile(post)}
+                  role={isClickable ? 'button' : undefined}
+                  tabIndex={isClickable ? 0 : undefined}
+                >
+                  <div className="w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-cyan-400 to-purple-600 flex items-center justify-center text-white font-bold shrink-0">
+                    {post.userAvatarUrl ? (
+                      <img src={post.userAvatarUrl} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      post.userName.charAt(0).toUpperCase()
+                    )}
                   </div>
-                  <div className="flex-1">
-                    <h4 className="font-semibold text-slate-800">{post.userName}</h4>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-semibold text-slate-800 dark:text-slate-100 truncate">{post.userName}</h4>
                     <p className="text-xs text-slate-500">
+                      {post.userUsername && <span className="text-slate-400">@{post.userUsername} · </span>}
                       {new Date(post.createdAt).toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',
@@ -110,10 +211,13 @@ export default function FeedPage({ onNavigate }) {
                     </p>
                   </div>
                   {challenge && (
-                    <div className="flex items-center gap-2 px-3 py-1 bg-cyan-100 rounded-full">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleChallengeClick(challenge.id); }}
+                      className="flex items-center gap-2 px-3 py-1 bg-cyan-100 dark:bg-cyan-900/40 rounded-full hover:bg-cyan-200 dark:hover:bg-cyan-800/50 transition-colors"
+                    >
                       <span className="text-lg">{challenge.emoji}</span>
-                      <span className="text-xs font-medium text-cyan-700">{challenge.title}</span>
-                    </div>
+                      <span className="text-xs font-medium text-cyan-700 dark:text-cyan-300">{challenge.title}</span>
+                    </button>
                   )}
                 </div>
 
@@ -137,31 +241,40 @@ export default function FeedPage({ onNavigate }) {
                 )}
 
                 {/* Post Content */}
-                <p className="text-slate-800 mb-4 whitespace-pre-wrap break-words">{post.content}</p>
+                <p className="text-slate-800 dark:text-slate-200 mb-4 whitespace-pre-wrap break-words">{post.content}</p>
 
                 {/* Post Type Badge */}
-                {post.type === 'completion' && (
-                  <div className="mb-4 inline-flex items-center gap-2 px-3 py-1 bg-green-100 rounded-full">
-                    <span className="text-green-700 text-sm font-medium">✓ Challenge Completed!</span>
-                  </div>
+                {post.type === 'completion' && post.challengeId && (
+                  <button
+                    onClick={() => handleChallengeClick(post.challengeId)}
+                    className="mb-4 inline-flex items-center gap-2 px-3 py-1 bg-green-100 dark:bg-green-900/40 rounded-full hover:bg-green-200 dark:hover:bg-green-800/50 transition-colors"
+                  >
+                    <span className="text-green-700 dark:text-green-300 text-sm font-medium">✓ Challenge Completed!</span>
+                  </button>
                 )}
 
                 {/* Post Actions */}
-                <div className="flex items-center gap-4 pt-4 border-t border-slate-100">
+                <div className="flex items-center gap-4 pt-4 border-t border-slate-100 dark:border-slate-700">
                   <button
-                    onClick={() => handleLike(post.id)}
+                    onClick={() => handleLike(post.id, post.isFake)}
                     className={`flex items-center gap-2 transition-colors ${
-                      isLiked ? 'text-red-500' : 'text-slate-400 hover:text-red-500'
+                      isLiked ? 'text-red-500' : 'text-slate-400 hover:text-red-500 dark:text-slate-500'
                     }`}
                   >
                     <Heart className={`w-5 h-5 ${isLiked ? 'fill-current' : ''}`} />
-                    <span className="text-sm">{post.likes.length}</span>
+                    <span className="text-sm">{getLikeCount(post)}</span>
                   </button>
-                  <button className="flex items-center gap-2 text-slate-400 hover:text-cyan-600 transition-colors">
+                  <button
+                    onClick={() => setCommentModalPost(post)}
+                    className="flex items-center gap-2 text-slate-400 hover:text-cyan-600 dark:text-slate-500 dark:hover:text-cyan-400 transition-colors"
+                  >
                     <MessageCircle className="w-5 h-5" />
-                    <span className="text-sm">{post.comments?.length || 0}</span>
+                    <span className="text-sm">{getCommentCount(post)}</span>
                   </button>
-                  <button className="flex items-center gap-2 text-slate-400 hover:text-cyan-600 transition-colors ml-auto">
+                  <button
+                    onClick={() => handleShare(post)}
+                    className="flex items-center gap-2 text-slate-400 hover:text-cyan-600 dark:text-slate-500 dark:hover:text-cyan-400 transition-colors ml-auto"
+                  >
                     <Share2 className="w-5 h-5" />
                   </button>
                 </div>
@@ -170,6 +283,15 @@ export default function FeedPage({ onNavigate }) {
           })}
         </div>
       )}
+
+      <PostCommentModal
+        isOpen={!!commentModalPost}
+        onClose={() => setCommentModalPost(null)}
+        post={commentModalPost}
+        comments={commentModalPost ? getComments(commentModalPost) : []}
+        onAddComment={handleAddComment}
+        isFake={commentModalPost?.isFake}
+      />
     </div>
   );
 }

@@ -391,8 +391,10 @@ export default function ProfilePage({ onNavigate }) {
         onSave={async (updates) => {
           const mapped = {};
           if (updates.full_name !== undefined) mapped.full_name = updates.full_name;
+          if (updates.username !== undefined) mapped.username = updates.username;
           if (updates.bio !== undefined) mapped.bio = updates.bio;
           if (updates.avatar_url !== undefined) mapped.avatar_url = updates.avatar_url;
+          if (updates.is_public !== undefined) mapped.is_public = updates.is_public;
           return updateProfile(mapped);
         }}
       />

@@ -17,6 +17,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess }) {
     if (!isOpen) {
       setSuccessMessage("");
       setError("");
+      setLoading(false);
     }
   }, [isOpen]);
 
@@ -25,21 +26,30 @@ export default function LoginModal({ isOpen, onClose, onSuccess }) {
     setError("");
     setLoading(true);
 
+    const timeoutId = setTimeout(() => {
+      setLoading(false);
+      setError("Request timed out. Check your connection and try again.");
+    }, 20000);
+
     try {
       if (isSignUp) {
         if (!email || !password || !fullName) {
           setError("Please fill in all fields");
           setLoading(false);
+          clearTimeout(timeoutId);
           return;
         }
         if (password.length < 6) {
           setError("Password must be at least 6 characters");
           setLoading(false);
+          clearTimeout(timeoutId);
           return;
         }
         const { user, error: signUpError, needsConfirmation } = await signUp(email, password, fullName);
+        clearTimeout(timeoutId);
         if (signUpError) {
           setError(signUpError);
+          setLoading(false);
         } else if (needsConfirmation) {
           setError("");
           setEmail("");
@@ -47,6 +57,7 @@ export default function LoginModal({ isOpen, onClose, onSuccess }) {
           setFullName("");
           setSuccessMessage("Check your email to confirm your account. Once confirmed, sign in below.");
           setIsSignUp(false);
+          setLoading(false);
         } else if (user) {
           setEmail("");
           setPassword("");
@@ -54,26 +65,38 @@ export default function LoginModal({ isOpen, onClose, onSuccess }) {
           setSuccessMessage("");
           onSuccess?.();
           onClose();
+          setLoading(false);
+        } else {
+          setLoading(false);
         }
       } else {
         if (!email || !password) {
           setError("Please fill in all fields");
           setLoading(false);
+          clearTimeout(timeoutId);
           return;
         }
         const { user, error: signInError } = await signIn(email, password);
+        clearTimeout(timeoutId);
         if (signInError) {
           setError(signInError);
+          setLoading(false);
         } else if (user) {
           setEmail("");
           setPassword("");
           onSuccess?.();
           onClose();
+          setLoading(false);
+        } else {
+          setLoading(false);
         }
       }
     } catch (err) {
+      clearTimeout(timeoutId);
       setError(err.message || "An error occurred");
+      setLoading(false);
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   };
