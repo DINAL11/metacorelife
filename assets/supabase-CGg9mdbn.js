@@ -1,0 +1,1 @@
+import{t as e}from"./index-CyD8LyuN.js";export{e as supabase};
