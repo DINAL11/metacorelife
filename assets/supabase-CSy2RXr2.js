@@ -1,0 +1,1 @@
+import{t as e}from"./index-DS6SHlmA.js";export{e as supabase};

@@ -1,1 +1,0 @@
-import{t as e}from"./index-Du08s564.js";export{e as supabase};
